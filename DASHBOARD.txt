@@ -1,0 +1,89 @@
+Panel 1 — New External Connection Pairs
+Counter:
+index=* sourcetype="bro:conn:json"
+| where match(id_orig_h, "^172\.16\.")
+| where NOT match(id_resp_h, "^172\.16\.")
+| where NOT match(id_resp_h, "^127\.")
+| where NOT match(id_resp_h, "^ff")
+| stats min(_time) as first_seen by id_orig_h id_resp_h id_resp_p
+| where first_seen > relative_time(now(), "-1h")
+| stats count as new_external_pairs
+Click-through table:
+index=* sourcetype="bro:conn:json"
+| where match(id_orig_h, "^172\.16\.")
+| where NOT match(id_resp_h, "^172\.16\.")
+| where NOT match(id_resp_h, "^127\.")
+| where NOT match(id_resp_h, "^ff")
+| stats min(_time) as first_seen count as sessions by id_orig_h id_resp_h id_resp_p service
+| where first_seen > relative_time(now(), "-1h")
+| eval first_seen=strftime(first_seen, "%Y-%m-%d %H:%M:%S")
+| sort -first_seen
+| table first_seen id_orig_h id_resp_h id_resp_p service sessions
+
+Panel 2 — New Internal Connection Pairs (new port or service)
+Counter:
+index=* sourcetype="bro:conn:json"
+| where match(id_orig_h, "^172\.16\.")
+| where match(id_resp_h, "^172\.16\.")
+| stats min(_time) as first_seen by id_orig_h id_resp_h id_resp_p service
+| where first_seen > relative_time(now(), "-1h")
+| stats count as new_internal_pairs
+Click-through table:
+index=* sourcetype="bro:conn:json"
+| where match(id_orig_h, "^172\.16\.")
+| where match(id_resp_h, "^172\.16\.")
+| stats min(_time) as first_seen count as sessions by id_orig_h id_resp_h id_resp_p service
+| where first_seen > relative_time(now(), "-1h")
+| eval first_seen=strftime(first_seen, "%Y-%m-%d %H:%M:%S")
+| sort -first_seen
+| table first_seen id_orig_h id_resp_h id_resp_p service sessions
+
+Panel 3 — DDoS
+Counter:
+index=* sourcetype="bro:conn:json" earliest=-1m
+| where NOT match(id_orig_h, "^172\.16\.")
+| where match(id_resp_h, "^172\.16\.")
+| stats count as conn_count dc(id_orig_h) as unique_sources by id_resp_h id_resp_p
+| where conn_count > 100 OR unique_sources > 20
+| stats count as ddos_targets
+Click-through table:
+index=* sourcetype="bro:conn:json" earliest=-1m
+| where NOT match(id_orig_h, "^172\.16\.")
+| where match(id_resp_h, "^172\.16\.")
+| stats count as conn_count dc(id_orig_h) as unique_sources sum(orig_bytes) as total_bytes by id_resp_h id_resp_p
+| where conn_count > 100 OR unique_sources > 20
+| sort -conn_count
+| table id_resp_h id_resp_p conn_count unique_sources total_bytes
+
+Panel 4 — Exfiltration
+Counter:
+index=* sourcetype="bro:conn:json" earliest=-10m
+| where match(id_orig_h, "^172\.16\.")
+| where NOT match(id_resp_h, "^172\.16\.")
+| stats sum(orig_bytes) as bytes_out by id_orig_h id_resp_h
+| where bytes_out > 5000000
+| stats count as exfil_alerts
+Click-through table:
+index=* sourcetype="bro:conn:json" earliest=-10m
+| where match(id_orig_h, "^172\.16\.")
+| where NOT match(id_resp_h, "^172\.16\.")
+| stats sum(orig_bytes) as bytes_out sum(resp_bytes) as bytes_in count as sessions by id_orig_h id_resp_h
+| where bytes_out > 5000000
+| eval mb_out=round(bytes_out/1048576,2)
+| sort -mb_out
+| table id_orig_h id_resp_h mb_out bytes_in sessions
+
+How The Self-Comparison Works
+The first_seen > relative_time(now(), "-1h") line is doing all the work. Every time you run the search:
+
+Splunk scans ALL data to find when each (src, dst, port) tuple first appeared ever
+Then filters to only tuples whose FIRST APPEARANCE was within the last hour
+Run it at 9am → shows tuples first seen after 8am
+Run it at 3pm → shows tuples first seen after 2pm
+No lookup table, no hardcoded times, no manual reset needed
+
+Adjust the window to match how often you check:
+
+Checking every hour → keep -1h
+Checking every few hours → change to -3h
+Coming back next day → change to -24h
