@@ -1,0 +1,37 @@
+configure
+
+# ── CHAIN DEFAULT ACTION ─────────────────────────────────────
+set firewall name BLOCK-MALICIOUS default-action accept
+
+# ── BAD IP BLOCKS (fill in before running) ──────────────────
+set firewall name BLOCK-MALICIOUS rule 11 action drop
+set firewall name BLOCK-MALICIOUS rule 11 source address [BAD_IP_1]
+
+set firewall name BLOCK-MALICIOUS rule 12 action drop
+set firewall name BLOCK-MALICIOUS rule 12 source address [BAD_IP_2]
+
+set firewall name BLOCK-MALICIOUS rule 13 action drop
+set firewall name BLOCK-MALICIOUS rule 13 source address [BAD_IP_3]
+
+# ── RDP — allow jumphost only, drop everything else ─────────
+set firewall name BLOCK-MALICIOUS rule 40 action accept
+set firewall name BLOCK-MALICIOUS rule 40 protocol tcp
+set firewall name BLOCK-MALICIOUS rule 40 source address 172.16.1.67
+set firewall name BLOCK-MALICIOUS rule 40 destination port 3389
+
+set firewall name BLOCK-MALICIOUS rule 41 action drop
+set firewall name BLOCK-MALICIOUS rule 41 protocol tcp
+set firewall name BLOCK-MALICIOUS rule 41 destination port 3389
+
+# ── SSH — allow jumphost only, drop everything else ─────────
+set firewall name BLOCK-MALICIOUS rule 50 action accept
+set firewall name BLOCK-MALICIOUS rule 50 protocol tcp
+set firewall name BLOCK-MALICIOUS rule 50 source address 172.16.1.67
+set firewall name BLOCK-MALICIOUS rule 50 destination port 22
+
+set firewall name BLOCK-MALICIOUS rule 51 action drop
+set firewall name BLOCK-MALICIOUS rule 51 protocol tcp
+set firewall name BLOCK-MALICIOUS rule 51 destination port 22
+
+commit
+save
